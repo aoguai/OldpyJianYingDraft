@@ -11,55 +11,87 @@ draft_folder = draft.DraftFolder(r"<你的草稿文件夹>")
 #     user_data_path=r"<你的 User Data 文件夹>",
 # )
 
-tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'readme_assets', 'tutorial')
-assert os.path.exists(tutorial_asset_dir), f"未找到例程素材文件夹{os.path.abspath(tutorial_asset_dir)}"
+tutorial_asset_dir = os.path.join(
+    os.path.dirname(__file__), "readme_assets", "tutorial"
+)
+assert os.path.exists(
+    tutorial_asset_dir
+), f"未找到例程素材文件夹{os.path.abspath(tutorial_asset_dir)}"
 
 # 创建剪映草稿
-script = draft_folder.create_draft("demo", 1920, 1080, allow_replace=True)  # 1920x1080分辨率
+script = draft_folder.create_draft(
+    "demo", 1920, 1080, allow_replace=True
+)  # 1920x1080分辨率
 
 # 按从背景到前景的顺序创建轨道；append_tracks 遵循“后来居上”
-bgm_ref, main_video_ref, caption_ref = script.append_tracks([
-    draft.TrackSpec(draft.TrackType.audio, "bgm"),          # 音频不参与视觉前后景，但也按追加顺序创建
-    draft.TrackSpec(draft.TrackType.video, "main_video"),
-    draft.TrackSpec(draft.TrackType.text, "caption"),
-])
+bgm_ref, main_video_ref, caption_ref = script.append_tracks(
+    [
+        draft.TrackSpec(
+            draft.TrackType.audio, "bgm"
+        ),  # 音频不参与视觉前后景，但也按追加顺序创建
+        draft.TrackSpec(draft.TrackType.video, "main_video"),
+        draft.TrackSpec(draft.TrackType.text, "caption"),
+    ]
+)
 
 # 创建音频片段
-audio_segment = draft.AudioSegment(os.path.join(tutorial_asset_dir, 'audio.mp3'),
-                                   trange("0s", "5s"),  # 片段将位于轨道上的0s-5s（注意5s表示持续时长而非结束时间）
-                                   volume=0.6)          # 音量设置为60%(-4.4dB)
-audio_segment.add_fade("1s", "0s")                      # 增加一个1s的淡入
-audio_segment.add_effect(draft.ToneEffectType.猴哥)        # 使用猴哥音色
+audio_segment = draft.AudioSegment(
+    os.path.join(tutorial_asset_dir, "audio.mp3"),
+    trange("0s", "5s"),  # 片段将位于轨道上的0s-5s（注意5s表示持续时长而非结束时间）
+    volume=0.6,
+)  # 音量设置为60%(-4.4dB)
+audio_segment.add_fade("1s", "0s")  # 增加一个1s的淡入
+audio_segment.add_effect(draft.ToneEffectType.猴哥)  # 使用猴哥音色
+
+# 创建云端音乐片段（剪映曲库素材，无需本地文件）
+cloud_bgm = draft.CloudMusicMaterial(
+    draft.CloudMusicType.冬日浪漫情歌
+)  # 通过曲库枚举构造，名称与时长自动取自库内元数据
+# 若已知音乐id，也可手动构造：draft.CloudMusicMaterial("<音乐id>", "名称", "1m")
+cloud_bgm_segment = draft.AudioSegment(
+    cloud_bgm, trange(audio_segment.end, "10s"), volume=0.8  # 紧跟本地音频，持续10s
+)
+cloud_bgm_segment.add_fade("0s", "2s")  # 增加一个2s的淡出
 
 # 创建视频片段
-video_segment = draft.VideoSegment(os.path.join(tutorial_asset_dir, 'video.mp4'),
-                                   trange("0s", "4.2s"))  # 片段将位于轨道上的0s-4.2s（取素材前4.2s内容，注意此处4.2s表示持续时长）
-video_segment.add_animation(IntroType.斜切)               # 添加一个入场动画"斜切"
+video_segment = draft.VideoSegment(
+    os.path.join(tutorial_asset_dir, "video.mp4"), trange("0s", "4.2s")
+)  # 片段将位于轨道上的0s-4.2s（取素材前4.2s内容，注意此处4.2s表示持续时长）
+video_segment.add_animation(IntroType.斜切)  # 添加一个入场动画"斜切"
 
 # 创建贴纸片段，由于需要读取素材长度，先创建素材实例
-gif_material = draft.VideoMaterial(os.path.join(tutorial_asset_dir, 'sticker.gif'))
-gif_segment = draft.VideoSegment(gif_material,
-                                 trange(video_segment.end, gif_material.duration))  # 紧跟上一片段，长度与gif一致
-gif_segment.add_background_filling("blur", 0.0625)  # 添加一个模糊背景填充效果, 模糊程度等同于剪映中第一档
+gif_material = draft.VideoMaterial(os.path.join(tutorial_asset_dir, "sticker.gif"))
+gif_segment = draft.VideoSegment(
+    gif_material, trange(video_segment.end, gif_material.duration)
+)  # 紧跟上一片段，长度与gif一致
+gif_segment.add_background_filling(
+    "blur", 0.0625
+)  # 添加一个模糊背景填充效果, 模糊程度等同于剪映中第一档
 
 # 为二者添加一个转场
-video_segment.add_transition(TransitionType.信号故障)  # 注意转场添加在“前一个”视频片段上
+video_segment.add_transition(
+    TransitionType.信号故障
+)  # 注意转场添加在“前一个”视频片段上
 
 # 将上述片段添加到对应轨道中
 script.add_segment(audio_segment, track=bgm_ref)
+script.add_segment(cloud_bgm_segment, track=bgm_ref)
 script.add_segment(video_segment, track=main_video_ref)
 script.add_segment(gif_segment, track=main_video_ref)
 
 # 创建一个带气泡效果的文本片段并添加到轨道中
 text_segment = draft.TextSegment(
-    "据说pyJianYingDraft效果还不错?", video_segment.target_timerange,  # 文本片段的首尾与主视频片段一致
-    font=draft.FontType.文轩体,                                       # 设置字体为文轩体
-    style=draft.TextStyle(color=(1.0, 1.0, 0.0)),                    # 字体颜色为黄色（实际上被花字覆盖）
-    clip_settings=draft.ClipSettings(transform_y=-0.8)               # 位置在屏幕下方
+    "据说pyJianYingDraft效果还不错?",
+    video_segment.target_timerange,  # 文本片段的首尾与主视频片段一致
+    font=draft.FontType.文轩体,  # 设置字体为文轩体
+    style=draft.TextStyle(color=(1.0, 1.0, 0.0)),  # 字体颜色为黄色（实际上被花字覆盖）
+    clip_settings=draft.ClipSettings(transform_y=-0.8),  # 位置在屏幕下方
 )
-text_segment.add_animation(draft.TextOutro.故障闪动, duration=tim("1s"))  # 添加出场动画“故障闪动”, 设置时长为1s
-text_segment.add_bubble(draft.TextBubbleType.标题58)                       # 添加文本气泡效果
-text_segment.add_effect(draft.TextEffectType.拼贴浅红)                     # 添加花字效果
+text_segment.add_animation(
+    draft.TextOutro.故障闪动, duration=tim("1s")
+)  # 添加出场动画“故障闪动”, 设置时长为1s
+text_segment.add_bubble(draft.TextBubbleType.标题58)  # 添加文本气泡效果
+text_segment.add_effect(draft.TextEffectType.拼贴浅红)  # 添加花字效果
 
 # 逐字样式示例：交替颜色（花字仍会覆盖文字的最终视觉样式）
 alt_style = draft.TextStyle(
@@ -76,7 +108,9 @@ alt_style = draft.TextStyle(
     auto_wrapping=text_segment.style.auto_wrapping,
     max_line_width=text_segment.style.max_line_width,
 )
-styles = [alt_style if index % 2 == 0 else None for index in range(len(text_segment.text))]
+styles = [
+    alt_style if index % 2 == 0 else None for index in range(len(text_segment.text))
+]
 text_segment.set_style_ranges_by_chars(styles=styles)
 script.add_segment(text_segment, track=caption_ref)  # 加到caption轨道中
 

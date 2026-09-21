@@ -15,7 +15,7 @@
 | 本地视频/图片素材与[时间控制](#素材截取与整体变速) | ✅ | 10.8 ✅ |
 | [视频整体调节](#视频整体调节) | ✅ | 10.8 ✅ |
 | [视频关键帧](#关键帧) | ✅ | 10.8 ✅ |
-| [视频蒙版](#蒙版) | ✅ | 10.8 🟡<br>本 fork 已接入，需本机验证 |
+| [视频蒙版](#蒙版) | ✅ | 10.8 🟡未验证 |
 | [视频色度抠图](#色度抠图) | ✅ | 10.8 ✅ |
 | [美颜与肤色](#添加片段美颜) | ✅ | 本 fork ✅ |
 | 视频背景填充[(示例代码)](demo.py) | ✅ | 10.8 ✅ |
@@ -36,6 +36,7 @@
 | [音频淡入淡出](#音频淡入淡出)与音量 | ✅ | 10.8 ✅ |
 | [音频场景音、音色效果](#添加片段特效) | ✅ | 10.8 ✅ |
 | [音频声音成曲效果](#添加片段特效) | ❌<br>不生效 | 10.8 ✅ |
+| [云端音乐素材](#云端音乐) | 🟡未验证 | ✅ |
 
 ### 轨道
 
@@ -116,7 +117,11 @@ pip install pyJianYingDraft
 
 ### 致谢
 
-- [wenshui330/jy-draftc](https://github.com/wenshui330/jy-draftc)：提供剪映高版本草稿 JSON 加解密方案参考并移植自此项目。
+本项目在演进过程中整合了以下开源项目的能力：
+
+- [GuanYixuan/pyJianYingDraft](https://github.com/GuanYixuan/pyJianYingDraft)：本项目 fork 自该仓库。
+- [wenshui330/jy-draftc](https://github.com/wenshui330/jy-draftc)：剪映高版本草稿 JSON 加解密方案，加密草稿支持移植自此项目。
+- [isYangs/jianying-editor-skill](https://github.com/isYangs/jianying-editor-skill)：云端音乐素材及其元数据的数据来源。
 <!-- PYPI:END -->
 
 # 快速上手
@@ -570,6 +575,32 @@ video_segment.add_fade("1.5s", "1.5s")  # 1.5秒淡入，1.5秒淡出
 - `add_fade()`方法接受两个参数：淡入时长和淡出时长
 - 对于视频片段，淡入淡出效果仅对有音轨的视频有效
 - 每个片段只能添加一次淡入淡出效果，重复调用会抛出`ValueError`
+
+### 云端音乐
+除了本地音频文件，还可以使用剪映云端曲库中的音乐作为背景音频。
+云端音乐不依赖本地文件，而是在草稿中记录曲库音乐 id，在剪映打开草稿时按 id 在线解析：
+
+```python
+import pyJianYingDraft as draft
+from pyJianYingDraft import trange
+
+# 云端音乐：推荐通过库内枚举构造（对应草稿中 type 为 "music" 的音频素材），
+# 素材名称与时长自动取自库内元数据，剪映打开草稿时按 id 在线解析
+music = draft.CloudMusicMaterial(draft.CloudMusicType.冬日浪漫情歌)
+
+# 也可按标题查找（忽略大小写、空格和下划线，优先匹配原始标题）
+# music = draft.CloudMusicMaterial(draft.CloudMusicType.from_name("More of My Time (Lofi)"))
+
+# 已知音乐 id 时也可手动构造（需显式指定名称与时长）
+# music = draft.CloudMusicMaterial("7390325771814386440", "晚风", "1m30s")
+
+script.append_tracks([
+    draft.TrackSpec(draft.TrackType.audio, "bgm"),
+])
+script.add_segment(draft.AudioSegment(music, trange("0s", "60s")), "bgm")
+
+script.dump("*你的草稿工程文件夹*/draft_content.json")
+```
 
 ### 蒙版
 蒙版的添加非常简单：调用`VideoSegment`的`add_mask`方法即可：

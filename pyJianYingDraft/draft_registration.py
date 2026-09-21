@@ -463,6 +463,8 @@ class DraftFolderRegistration:
         for audio in materials.get("audios", []) or []:
             if not isinstance(audio, dict) or not isinstance(audio.get("path"), str) or not audio["path"]:
                 continue
+            if audio.get("type") == "music":
+                continue  # 云端曲库音乐无本地文件，加入素材列表会被剪映校验为媒体丢失
             media_items.append({
                 "path": audio["path"],
                 "metetype": "music",

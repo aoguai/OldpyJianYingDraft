@@ -156,6 +156,22 @@ class AnimationMeta:
         self.effect_id = effect_id
         self.md5 = md5
 
+# 云端音乐元数据
+class MusicMeta:
+    """云端音乐元数据, 用于剪映云端音乐库"""
+
+    title: str
+    """音乐标题"""
+    music_id: str
+    """剪映云端音乐ID"""
+    duration: int
+    """音乐时长, 单位为微秒"""
+
+    def __init__(self, title: str, music_id: str, duration: float):
+        self.title = title
+        self.music_id = music_id
+        self.duration = int(round(duration * 1e6))
+
 # 蒙版元数据
 class MaskMeta:
     """蒙版元数据"""

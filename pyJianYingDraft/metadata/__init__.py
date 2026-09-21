@@ -20,6 +20,9 @@ from .audio_scene_effect import AudioSceneEffectType
 from .tone_effect import ToneEffectType
 from .speech_to_song import SpeechToSongType
 
+# 云端音乐
+from .cloud_music import CloudMusicType
+
 # 文本动画
 from .text_intro import TextIntro
 from .text_outro import TextOutro
@@ -55,6 +58,7 @@ __all__ = [
     "AudioSceneEffectType",
     "ToneEffectType",
     "SpeechToSongType",
+    "CloudMusicType",
     "VideoSceneEffectType",
     "VideoCharacterEffectType",
     "BeautyType",

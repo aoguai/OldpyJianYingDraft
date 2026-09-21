@@ -1,6 +1,7 @@
 import sys
 
 from .audio_segment import AudioSegment
+from .cloud_materials import CloudMusicMaterial
 from .draft_codec import DraftContentCodec, JianyingDraftCryptoCodec
 from .draft_crypto import DraftCryptoConfig
 from .draft_folder import DraftFolder
@@ -9,6 +10,7 @@ from .keyframe import KeyframeProperty
 from .local_materials import AudioMaterial, CropSettings, VideoMaterial
 from .metadata import AudioSceneEffectType
 from .metadata import BeautyType, SkinToneType
+from .metadata import CloudMusicType
 from .metadata import ToneEffectType
 from .metadata import SpeechToSongType
 from .metadata import FilterType, FontType, GroupAnimationType, IntroType, MaskType, MixModeType, OutroType
@@ -44,6 +46,7 @@ __all__ = [
     "AudioSceneEffectType",
     "ToneEffectType",
     "SpeechToSongType",
+    "CloudMusicType",
     "VideoSceneEffectType",
     "VideoCharacterEffectType",
     "BeautyType",
@@ -51,6 +54,7 @@ __all__ = [
     "CropSettings",
     "VideoMaterial",
     "AudioMaterial",
+    "CloudMusicMaterial",
     "KeyframeProperty",
     "Timerange",
     "AudioSegment",
