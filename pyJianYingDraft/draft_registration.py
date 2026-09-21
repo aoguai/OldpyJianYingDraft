@@ -519,6 +519,7 @@ class DraftFolderRegistration:
 
         root_entry = self.build_root_meta_entry(
             existing_entry=existing_entry,
+            draft_json_file=script_file.save_path,
             draft_name=draft_name,
             draft_path=draft_path,
             draft_id=draft_id,
@@ -546,6 +547,7 @@ class DraftFolderRegistration:
         self,
         *,
         existing_entry: Optional[Dict[str, Any]],
+        draft_json_file: str,
         draft_name: str,
         draft_path: str,
         draft_id: str,
@@ -559,7 +561,7 @@ class DraftFolderRegistration:
             "draft_cover": os.path.join(draft_path, "draft_cover.jpg"),
             "draft_fold_path": draft_path,
             "draft_id": draft_id,
-            "draft_json_file": os.path.join(draft_path, "draft_content.json"),
+            "draft_json_file": draft_json_file,
             "draft_name": draft_name,
             "draft_new_version": draft_new_version,
             "draft_root_path": self.draft_root_path,

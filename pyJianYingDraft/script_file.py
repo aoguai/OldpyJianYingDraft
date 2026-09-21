@@ -1,7 +1,9 @@
 import json
+import os
+import shutil
 import uuid
 from copy import deepcopy
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from . import assets
 from . import util
@@ -13,6 +15,9 @@ from .draft_content_loader import FallbackLoader, load_draft_content
 from .script_material import ScriptMaterial
 from .template_mode import ImportedTrack, import_track
 from .track import BaseTrack, Track
+
+MATERIALS_DIR_NAME = "materials"
+"""草稿文件夹内存放内联素材的子目录名"""
 
 
 class ScriptFile(_ScriptFileTrackOps, _ScriptFileSegmentOps, _ScriptFileTemplateOps):
@@ -177,8 +182,65 @@ class ScriptFile(_ScriptFileTrackOps, _ScriptFileSegmentOps, _ScriptFileTemplate
         effective_codec = content_codec if content_codec is not None else self._loaded_content_codec
         write_json_text_with_codec(file_path, self.dumps(), content_codec=effective_codec)
 
-    def save(self) -> None:
+    @staticmethod
+    def _unique_material_name(name: str, used_names: Set[str]) -> str:
+        """避开`used_names`中已占用的文件名, 必要时追加序号"""
+        if name not in used_names:
+            return name
+
+        stem, suffix = os.path.splitext(name)
+        index = 1
+        while f"{stem}_{index}{suffix}" in used_names:
+            index += 1
+        return f"{stem}_{index}{suffix}"
+
+    def _inline_materials(self, target_dir: str) -> None:
+        """将本地音视频素材复制到`target_dir`并改写素材路径
+
+        复制后草稿成为自包含单元, 可连同`materials`子目录整体拷贝到另一台机器
+        或移动存储, 打开即用, 不再依赖原素材路径. 也可借此绕开 macOS 的
+        桌面/文档/下载目录权限限制——剪映无权访问这些位置时, 打开草稿会提示
+        "暂无访问权限"(草稿本身仍能正常解析).
+
+        仅处理本对象创建的本地素材; 模板模式下导入的素材路径由剪映自行管理, 不作改动.
+
+        Args:
+            target_dir (`str`): 素材复制到的目标文件夹
+        """
+        materials = [*self.materials.videos, *self.materials.audios]
+        if not materials:
+            return
+
+        os.makedirs(target_dir, exist_ok=True)
+        copied: Dict[str, str] = {}  # 素材源路径 -> 复制后的路径
+        used_names: Set[str] = set()
+
+        for material in materials:
+            source = os.path.abspath(material.path) if material.path else ""
+            if not source or not os.path.exists(source):
+                continue  # 素材缺失交由剪映的"链接媒体"流程处理, 此处不中断保存
+
+            # 同一素材被多个片段引用时只复制一次
+            if source in copied:
+                material.path = copied[source]
+                continue
+
+            name = self._unique_material_name(os.path.basename(source), used_names)
+            used_names.add(name)
+            target = os.path.join(target_dir, name)
+            if source != os.path.abspath(target):
+                shutil.copy2(source, target)
+
+            copied[source] = target
+            material.path = target
+
+    def save(self, *, inline_materials: bool = False) -> None:
         """保存草稿文件至打开时的路径
+
+        Args:
+            inline_materials (`bool`, optional): 是否将本地素材复制进草稿文件夹的
+                `materials`子目录并改写素材路径, 使草稿可连同素材整体迁移.
+                默认为否.
 
         Raises:
             `ValueError`: 没有设置保存路径
@@ -187,6 +249,10 @@ class ScriptFile(_ScriptFileTrackOps, _ScriptFileSegmentOps, _ScriptFileTemplate
             raise ValueError("没有设置保存路径, 可能不在模板模式下")
         if self._before_save_hook is not None:
             self._before_save_hook(self)
+
+        if inline_materials:
+            self._inline_materials(os.path.join(os.path.dirname(self.save_path), MATERIALS_DIR_NAME))
+
         self.dump(self.save_path)
         if self._after_save_hook is not None:
             self._after_save_hook(self)

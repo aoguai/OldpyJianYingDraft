@@ -12,6 +12,15 @@ from .draft_content_loader import FallbackLoader
 from .draft_registration import DraftFolderRegistration
 from .script_file import ScriptFile
 
+DRAFT_FILE_NAME = "draft_info.json"
+"""草稿主文件名
+
+剪映 6.0 及以上版本读取此文件, 已在 11.4.0 上实测确认. 旧文件名`draft_content.json`
+仅被"草稿包导入"流程识别(该流程会将其重命名), 直接放入草稿文件夹会被判定为"草稿内容已损坏".
+"""
+
+LEGACY_DRAFT_FILE_NAME = "draft_content.json"
+"""旧版(剪映 5.9 及以下)的草稿主文件名, 仅用于读取兼容"""
 
 class DraftFolder:
     """Manage drafts rooted in one filesystem directory.
@@ -36,6 +45,20 @@ class DraftFolder:
         if fallback_loader is not None and content_codec is not None:
             raise ValueError("fallback_loader and content_codec are mutually exclusive")
 
+        """管理一个包含若干草稿的文件夹.
+
+        Args:
+            folder_path (`str`): 包含若干草稿的文件夹, 一般取剪映保存草稿的位置即可
+            fallback_loader (`Callable`, optional): 当草稿主文件无法按明文 JSON 读取时使用的后备读取器.
+                剪映 6.0 及以上版本保存的草稿是密文, 读取它们需要提供本参数.
+                其输入为文件原始字节串, 返回值仅支持 JSON 字符串或字典.
+            content_codec (`DraftContentCodec`, optional): 主仓提供的密文 codec,
+                与`fallback_loader`互斥, 优先使用.
+            user_data_path (`str`, optional): 剪映用户数据目录, 用于草稿注册.
+
+        Raises:
+            `FileNotFoundError`: 路径不存在
+        """
         self.folder_path = folder_path
         self.fallback_loader = fallback_loader
         self.content_codec = content_codec
@@ -105,8 +128,26 @@ class DraftFolder:
         shutil.copy(assets.get_asset_path("DRAFT_META_TEMPLATE"), os.path.join(draft_path, "draft_meta_info.json"))
 
         script_file = ScriptFile(width, height, fps, maintrack_adsorb)
-        script_file.save_path = os.path.join(draft_path, "draft_content.json")
+        script_file.save_path = os.path.join(draft_path, DRAFT_FILE_NAME)
         return self._registration.configure_script_file(script_file, draft_name, is_new_draft=True)
+
+    @staticmethod
+    def _draft_file_path(draft_path: str) -> str:
+        """草稿主文件的路径, 优先新版文件名, 回退旧版以兼容 5.9 及以下产出的草稿
+
+        Args:
+            draft_path (`str`): 草稿文件夹路径
+        """
+        new_path = os.path.join(draft_path, DRAFT_FILE_NAME)
+        if os.path.exists(new_path):
+            return new_path
+
+        legacy_path = os.path.join(draft_path, LEGACY_DRAFT_FILE_NAME)
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+        # 两者均不存在时指向新版文件名, 使报错信息落在当前应有的路径上
+        return new_path
 
     def inspect_material(self, draft_name: str) -> None:
         """Print sticker-material metadata for the selected draft."""
@@ -121,7 +162,7 @@ class DraftFolder:
         if not os.path.exists(draft_path):
             raise FileNotFoundError(f"草稿文件夹 {draft_name} 不存在")
         script_file = ScriptFile._load_template(
-            os.path.join(draft_path, "draft_content.json"),
+            self._draft_file_path(draft_path),
             fallback_loader=self.fallback_loader,
             content_codec=self.content_codec,
         )
@@ -147,7 +188,7 @@ class DraftFolder:
 
         shutil.copytree(template_path, new_draft_path, dirs_exist_ok=allow_replace)
         script_file = ScriptFile._load_template(
-            os.path.join(new_draft_path, "draft_content.json"),
+            self._draft_file_path(new_draft_path),
             fallback_loader=self.fallback_loader,
             content_codec=self.content_codec,
         )

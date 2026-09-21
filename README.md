@@ -73,13 +73,13 @@
 
 
 ### 模板模式
-> ⚠️ 新版剪映中的 `draft_content.json` 往往不是可直接读取的明文 JSON；因此“加载模板”相关能力在新版剪映上通常需要通过 `DraftFolder(..., fallback_loader=...)` 接入额外读取器，详情请参见[此处](https://github.com/GuanYixuan/pyJianYingDraft/releases)
+> ⚠️ 新版剪映的草稿主文件是 `draft_info.json`（6.0 起改名），且内容通常为密文；因此“加载模板”相关能力在新版剪映上通常需要通过 `DraftFolder(..., fallback_loader=...)` 接入额外读取器，详情请参见[此处](https://github.com/GuanYixuan/pyJianYingDraft/releases)
 
 > ℹ 本 fork 额外提供可逆的 `content_codec` 私有扩展，用于拥有合法访问权的本机草稿格式；它不是上游公开实现，也不应进入面向上游的 PR。使用内置加密 codec 时，项目会通过本机剪映的 `videoeditor.dll` 完成加解密，不分发该 DLL。
 
 | 功能名称 | 5.9 支持状态 | 新版剪映支持状态 |
 |---|---|---|
-| [加载](#加载模板) `draft_content.json` 文件作为模板 | ✅ | 10.8 🟡<br>需 `fallback_loader` |
+| [加载](#加载模板)草稿主文件作为模板 | ✅ | 11.4.0 🟡<br>需 `fallback_loader` |
 | [替换音视频片段的素材](#根据名称替换素材) | ✅ | 10.8 🟡<br>依赖模板可读 |
 | [修改文本片段的文本内容](#替换文本片段的内容) | ✅ | 10.8 🟡<br>依赖模板可读 |
 | [将模板草稿中的音视频/文本轨道整体导入到另一草稿中](#导入模板草稿中的轨道) | ✅ | 10.8 🟡<br>依赖模板可读 |
@@ -469,7 +469,7 @@ script.add_segment(seg2, "2")
 script.add_segment(seg3, "3")
 
 # 保存草稿
-script.dump("*你的草稿工程文件夹*/draft_content.json")
+script.dump("*你的草稿工程文件夹*/draft_info.json")
 ```
 
 #### 多轨道操作
@@ -543,7 +543,7 @@ video_segment.add_keyframe(KeyframeProperty.alpha, video_segment.duration, 0.0) 
 script.add_segment(video_segment)
 
 # 保存草稿
-script.dump("*你的草稿工程文件夹*/draft_content.json")
+script.dump("*你的草稿工程文件夹*/draft_info.json")
 ```
 
 除了`alpha`外，`KeyframeProperty`中还有平移、旋转、缩放、音量、饱和度等属性，它们都可以设置关键帧。
