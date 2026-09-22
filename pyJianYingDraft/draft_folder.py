@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from . import assets
 from .draft_codec import DraftContentCodec
@@ -86,6 +86,10 @@ class DraftFolder:
     def remove(self, draft_name: str) -> None:
         """Delete a draft and remove its private registration references."""
         self._registration.remove_draft(draft_name)
+
+    def list_folders(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Read the current user's logical folders without creating configuration."""
+        return self._registration.list_folders()
 
     def create_folder(self, logical_folder_path: str) -> None:
         """Create a private Jianying logical folder under User Data."""

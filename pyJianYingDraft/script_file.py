@@ -12,6 +12,7 @@ from ._script_file_template import _ScriptFileTemplateOps
 from ._script_file_tracks import _ScriptFileTrackOps
 from .draft_codec import DraftContentCodec, load_json_object_with_codec, write_json_text_with_codec
 from .draft_content_loader import FallbackLoader, load_draft_content
+from .draft_file_paths import map_material_file_paths
 from .script_material import ScriptMaterial
 from .template_mode import ImportedTrack, import_track
 from .track import BaseTrack, Track
@@ -185,60 +186,71 @@ class ScriptFile(_ScriptFileTrackOps, _ScriptFileSegmentOps, _ScriptFileTemplate
     @staticmethod
     def _unique_material_name(name: str, used_names: Set[str]) -> str:
         """避开`used_names`中已占用的文件名, 必要时追加序号"""
-        if name not in used_names:
+        if os.path.normcase(name) not in used_names:
             return name
 
         stem, suffix = os.path.splitext(name)
         index = 1
-        while f"{stem}_{index}{suffix}" in used_names:
+        while os.path.normcase(f"{stem}_{index}{suffix}") in used_names:
             index += 1
         return f"{stem}_{index}{suffix}"
 
-    def _inline_materials(self, target_dir: str) -> None:
-        """将本地音视频素材复制到`target_dir`并改写素材路径
+    def map_material_paths(self, transform: Callable[[str], str]) -> None:
+        """Map known local media and font references before serialization."""
+        def map_path(value: str) -> str:
+            mapped = transform(value)
+            if mapped != value and self._draft_registration_context is not None:
+                key = os.path.normcase(os.path.normpath(value.replace("\\", os.sep).replace("/", os.sep)))
+                self._draft_registration_context.setdefault("material_path_mapping", {})[key] = mapped
+            return mapped
 
-        复制后草稿成为自包含单元, 可连同`materials`子目录整体拷贝到另一台机器
-        或移动存储, 打开即用, 不再依赖原素材路径. 也可借此绕开 macOS 的
-        桌面/文档/下载目录权限限制——剪映无权访问这些位置时, 打开草稿会提示
-        "暂无访问权限"(草稿本身仍能正常解析).
+        for material in [*self.materials.videos, *self.materials.audios]:
+            if material.path and not material.path.startswith("<cloud://"):
+                material.path = map_path(material.path)
+        map_material_file_paths(
+            {"texts": self.materials.texts, "masks": self.materials.masks,
+             "stickers": self.materials.stickers}, map_path,
+        )
+        map_material_file_paths(self.imported_materials, map_path)
 
-        仅处理本对象创建的本地素材; 模板模式下导入的素材路径由剪映自行管理, 不作改动.
-
-        Args:
-            target_dir (`str`): 素材复制到的目标文件夹
-        """
-        materials = [*self.materials.videos, *self.materials.audios]
-        if not materials:
-            return
-
+    def _inline_materials(self, target_dir: str, *, only_from: Optional[str] = None) -> None:
+        """Copy local media and fonts, optionally only from one managed source root."""
+        target_dir = os.path.abspath(target_dir)
         os.makedirs(target_dir, exist_ok=True)
-        copied: Dict[str, str] = {}  # 素材源路径 -> 复制后的路径
-        used_names: Set[str] = set()
+        copied: Dict[str, str] = {}
+        used_names: Set[str] = {os.path.normcase(name) for name in os.listdir(target_dir)}
+        source_root = os.path.normcase(os.path.abspath(only_from)) if only_from is not None else None
 
-        for material in materials:
-            source = os.path.abspath(material.path) if material.path else ""
-            if not source or not os.path.exists(source):
-                continue  # 素材缺失交由剪映的"链接媒体"流程处理, 此处不中断保存
-
-            # 同一素材被多个片段引用时只复制一次
-            if source in copied:
-                material.path = copied[source]
-                continue
-
-            name = self._unique_material_name(os.path.basename(source), used_names)
-            used_names.add(name)
-            target = os.path.join(target_dir, name)
-            if source != os.path.abspath(target):
+        def copy_material(raw_path: str) -> str:
+            source = os.path.abspath(raw_path)
+            source_key = os.path.normcase(source)
+            if source_root is not None:
+                try:
+                    if os.path.commonpath([source_root, source_key]) != source_root:
+                        return raw_path
+                except ValueError:
+                    return raw_path
+            if not os.path.isfile(source):
+                raise FileNotFoundError(f"内联素材不存在: {source}")
+            if source_key in copied:
+                return copied[source_key]
+            if os.path.normcase(os.path.dirname(source)) == os.path.normcase(target_dir):
+                target = source
+            else:
+                name = self._unique_material_name(os.path.basename(source), used_names)
+                used_names.add(os.path.normcase(name))
+                target = os.path.join(target_dir, name)
                 shutil.copy2(source, target)
+            copied[source_key] = target
+            return target
 
-            copied[source] = target
-            material.path = target
+        self.map_material_paths(copy_material)
 
     def save(self, *, inline_materials: bool = False) -> None:
         """保存草稿文件至打开时的路径
 
         Args:
-            inline_materials (`bool`, optional): 是否将本地素材复制进草稿文件夹的
+            inline_materials (`bool`, optional): 是否将新建及模板导入的本地素材复制进草稿文件夹的
                 `materials`子目录并改写素材路径, 使草稿可连同素材整体迁移.
                 默认为否.
 

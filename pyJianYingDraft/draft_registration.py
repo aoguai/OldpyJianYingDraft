@@ -22,6 +22,7 @@ from .draft_codec import (
     write_json_object_with_codec,
 )
 from .script_file import ScriptFile
+from .draft_file_paths import map_draft_file_paths
 
 
 class DraftFolderRegistration:
@@ -398,6 +399,20 @@ class DraftFolderRegistration:
         )
 
     def sync_draft_materials(self, meta_info: Dict[str, Any], script_file: ScriptFile) -> None:
+        context = script_file._draft_registration_context or {}
+        mapping = context.get("material_path_mapping", {})
+
+        def relocated_path(value: str) -> str:
+            seen: Set[str] = set()
+            key = self.normalize_filesystem_path(value)
+            while key in mapping and key not in seen:
+                seen.add(key)
+                value = mapping[key]
+                key = self.normalize_filesystem_path(value)
+            return value
+
+        if mapping:
+            map_draft_file_paths(meta_info, relocated_path)
         draft_materials = meta_info.get("draft_materials")
         if not isinstance(draft_materials, list):
             draft_materials = []
@@ -718,6 +733,19 @@ class DraftFolderRegistration:
             return
         mappings_meta["mappings"] = remaining_mappings
         self.write_local_draft_folder_config(mappings_path, mappings_meta, timestamp=self.current_timestamp())
+
+    def list_folders(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Read logical folders and mappings without initializing any files."""
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        for key, path in (
+            ("folders", self.folder_meta_info_path()),
+            ("mappings", self.draft_folder_mappings_path()),
+        ):
+            values = self.read_json_object(path).get(key, []) if os.path.exists(path) else []
+            if not isinstance(values, list) or any(not isinstance(item, dict) for item in values):
+                raise ValueError(f"{path} 中的 {key} 不是对象数组")
+            result[key] = values
+        return result
 
     def load_local_draft_folder_configs(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         self.ensure_local_draft_folder_configs()
