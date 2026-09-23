@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, Tuple
 
@@ -174,6 +176,24 @@ def _loads_json(data: bytes) -> Any:
     return json.loads(data.decode("utf-8-sig"))
 
 
+_ATOMIC_REPLACE_ATTEMPTS = 4
+_ATOMIC_REPLACE_RETRY_ERRNOS = frozenset(
+    {errno.EACCES, errno.EAGAIN, errno.EBUSY, errno.EIO, errno.EPERM}
+)
+
+
+def _replace_with_retry(source: Path, target: Path) -> None:
+    for attempt in range(_ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as exc:
+            is_last_attempt = attempt == _ATOMIC_REPLACE_ATTEMPTS - 1
+            if is_last_attempt or exc.errno not in _ATOMIC_REPLACE_RETRY_ERRNOS:
+                raise
+            time.sleep(0.25 * (2**attempt))
+
+
 def _write_bytes_atomic(path: PathLike, data: bytes) -> Path:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,7 +208,7 @@ def _write_bytes_atomic(path: PathLike, data: bytes) -> Path:
         ) as file_obj:
             temp_path = Path(file_obj.name)
             file_obj.write(data)
-        os.replace(temp_path, output_path)
+        _replace_with_retry(temp_path, output_path)
         temp_path = None
     finally:
         if temp_path is not None and temp_path.exists():
@@ -206,7 +226,7 @@ def _backup_once(path: Path, *, enabled: bool = True) -> None:
     temp_path = Path(f"{backup_path}.{os.getpid()}.tmp")
     try:
         shutil.copy2(path, temp_path)
-        os.replace(temp_path, backup_path)
+        _replace_with_retry(temp_path, backup_path)
     finally:
         if temp_path.exists():
             temp_path.unlink()
