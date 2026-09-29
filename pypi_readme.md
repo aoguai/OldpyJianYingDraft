@@ -15,7 +15,7 @@
 | 本地视频/图片素材与[时间控制](#素材截取与整体变速) | ✅ | 10.8 ✅ |
 | [视频整体调节](#视频整体调节) | ✅ | 10.8 ✅ |
 | [视频关键帧](#关键帧) | ✅ | 10.8 ✅ |
-| [视频蒙版](#蒙版) | ✅ | 10.8 🟡未验证 |
+| [视频蒙版](#蒙版) | ✅ | 10.8 🟡本 fork 未验证<br>上游报告不生效 |
 | [视频色度抠图](#色度抠图) | ✅ | 10.8 ✅ |
 | [美颜与肤色](#添加片段美颜) | ✅ | 本 fork ✅ |
 | 视频背景填充[(示例代码)](demo.py) | ✅ | 10.8 ✅ |
@@ -73,13 +73,13 @@
 
 
 ### 模板模式
-> ⚠️ 新版剪映中的 `draft_content.json` 往往不是可直接读取的明文 JSON；因此“加载模板”相关能力在新版剪映上通常需要通过 `DraftFolder(..., fallback_loader=...)` 接入额外读取器，详情请参见[此处](https://github.com/GuanYixuan/pyJianYingDraft/releases)
+> ⚠️ 新版剪映的草稿主文件是 `draft_info.json`（6.0 起改名），且内容通常为密文；因此“加载模板”相关能力在新版剪映上通常需要通过 `DraftFolder(..., fallback_loader=...)` 接入额外读取器，详情请参见[此处](https://github.com/GuanYixuan/pyJianYingDraft/releases)
 
 > ℹ 本 fork 额外提供可逆的 `content_codec` 私有扩展，用于拥有合法访问权的本机草稿格式；它不是上游公开实现，也不应进入面向上游的 PR。使用内置加密 codec 时，项目会通过本机剪映的 `videoeditor.dll` 完成加解密，不分发该 DLL。
 
 | 功能名称 | 5.9 支持状态 | 新版剪映支持状态 |
 |---|---|---|
-| [加载](#加载模板) `draft_content.json` 文件作为模板 | ✅ | 10.8 🟡<br>需 `fallback_loader` |
+| [加载](#加载模板)草稿主文件作为模板 | ✅ | 11.4.0 🟡<br>需 `fallback_loader` |
 | [替换音视频片段的素材](#根据名称替换素材) | ✅ | 10.8 🟡<br>依赖模板可读 |
 | [修改文本片段的文本内容](#替换文本片段的内容) | ✅ | 10.8 🟡<br>依赖模板可读 |
 | [将模板草稿中的音视频/文本轨道整体导入到另一草稿中](#导入模板草稿中的轨道) | ✅ | 10.8 🟡<br>依赖模板可读 |
@@ -277,7 +277,7 @@ script.replace_material_by_name("audio.mp3", new_material)  # 替换名称为"au
 
 此过程分为两步：**选取轨道**和**替换素材**，以上方音频素材的替换为例：
 ```python
-from pyJianYingDraft import trange, ShrinkMode, ExtendMode
+from pyJianYingDraft import trange_seconds, ShrinkMode, ExtendMode
 
 audio_track = script.get_imported_track(
     draft.TrackType.audio,                # 选取导入的音频轨道
@@ -288,7 +288,7 @@ audio_track = script.get_imported_track(
 script.replace_material_by_seg(
     audio_track, 0, new_material,          # 选取audio_track中下标为0的片段，也即第一个片段
     #source_timerange=None,                # 若不指定，则默认使用整个素材
-    source_timerange=trange("0s", "10s"),  # 此处指定截取素材前10秒(注意原片段时长为5秒)
+    source_timerange=trange_seconds(0, duration=10),  # 此处指定截取素材前10秒(注意原片段时长为5秒)
     handle_shrink=ShrinkMode.cut_tail,     # 片段若要缩短，则依靠前移终止点来实现
 handle_extend=ExtendMode.push_tail         # 片段若要延长，则依靠后移终止点来实现，必要时允许后移后续片段
 )
@@ -397,6 +397,10 @@ for name in draft_names:
 
 > ⚠️ 注意`trange`的第二个参数是**持续时长**，而不是结束时间
 
+若时间由秒数计算得到，推荐使用`trange_seconds(start, *, end=None, duration=None)`：`start`、`end`、`duration`均以秒为单位，`end`和`duration`必须且只能提供一个。此函数分别将起点和终点取整到微秒，再计算片段时长。
+
+相同的秒数时长在不同起点处，取整后的微秒时长可能相差1微秒。连续片段建议使用`end`指定共同的绝对边界。已有的微秒值或时间字符串仍使用`trange`。
+
 例如：
 ```python
 import pyJianYingDraft as draft
@@ -407,6 +411,10 @@ assert 1000000 == SEC == tim("1s") == tim("0.01666667m")
 
 # 0~1分钟
 assert draft.Timerange(0, 60*SEC) == trange("0s", "1m") == trange("0s", "0.5m30s")
+
+# 按秒数创建片段：以下两种写法都表示从1.25秒到2.5秒
+by_end = draft.trange_seconds(1.25, end=2.5)
+by_duration = draft.trange_seconds(1.25, duration=1.25)
 
 # 片段开始后2秒
 seg: draft.VideoSegment
@@ -424,7 +432,7 @@ assert seg.target_timerange.start + 2*SEC == seg.target_timerange.start + tim("2
 ```python
 import os
 import pyJianYingDraft as draft
-from pyJianYingDraft import trange, SEC
+from pyJianYingDraft import trange, trange_seconds, SEC
 
 # 假定已有草稿文件script（参见“快速上手”），创建三个轨道
 script.append_tracks([
@@ -439,28 +447,29 @@ tutorial_asset_dir = os.path.join(os.path.dirname(__file__), 'readme_assets', 't
 video_path = os.path.join(tutorial_asset_dir, 'video.mp4')
 
 # 直接传入素材路径
-seg1 = draft.VideoSegment(video_path, trange("0s", "4s"))  # 截取素材的前4秒
+seg1 = draft.VideoSegment(video_path, trange_seconds(0, duration=4))  # 截取素材的前4秒
 
 # 方式二：传统构造
 mat = draft.VideoMaterial(video_path)  # 先创建素材实例
-seg2 = draft.VideoSegment(mat, trange("0s", "4s"))  # 再传入片段构造函数
+seg2 = draft.VideoSegment(mat, trange_seconds(0, duration=4))  # 再传入片段构造函数
 
 # 视频素材长度为 5s
 print("Video material length: %f s" % (mat.duration / SEC))
 
 # 以下部分讲解素材的时间截取与变速
 # 不指定source_timerange，则自动从头截取素材等长片段
-seg11 = draft.VideoSegment(video_path, trange("0s", "4s"))              # 自动截取素材的前4秒（4s表示持续时长）
-seg2  = draft.VideoSegment(video_path, trange("0s", "4s"), speed=1.25)  # 自动截取素材的前4*1.25=5秒
-seg4  = draft.VideoSegment(video_path, trange("0s", "3s"), speed=3.0)   # 截取前3*3.0=9秒，素材不够长故报错
+seg11 = draft.VideoSegment(video_path, trange_seconds(0, duration=4))              # 自动截取素材的前4秒
+seg2  = draft.VideoSegment(video_path, trange_seconds(0, duration=4), speed=1.25)  # 自动截取素材的前4*1.25=5秒
+seg4  = draft.VideoSegment(video_path, trange_seconds(0, duration=3), speed=3.0)   # 截取前3*3.0=9秒，素材不够长故报错
 
 # 指定source_timerange，则截取素材的指定片段，自动设置速度
-seg12 = draft.VideoSegment(video_path, trange("4s", "1s"),
-                            source_timerange=trange(0, "4s"))     # 将素材在1s内放完，速度自动设置为5.0
+seg12 = draft.VideoSegment(video_path, trange_seconds(4, duration=1),
+                            source_timerange=trange_seconds(0, duration=4))  # 将素材在1s内放完，速度自动设置为4.0
 
 # 同时指定source_timerange和speed，则截取素材的指定片段，并根据播放速度覆盖target_timerange的duration
+# 保留"66666h"作为字符串形式的占位时长，实际时长会被speed覆盖
 seg3  = draft.VideoSegment(video_path, trange("1s", "66666h"),
-                            source_timerange=trange(0, "5s"),
+                            source_timerange=trange_seconds(0, duration=5),
                             speed=2.0) # 将长5s的素材按2倍速放完，target_timerange的duration自动设为2.5s
 
 # 将片段加入轨道
@@ -560,14 +569,14 @@ audio_segment.add_keyframe("0s", 0.6) # 片段开始时的音量为60%
 
 ```python
 import pyJianYingDraft as draft
-from pyJianYingDraft import trange
+from pyJianYingDraft import trange_seconds
 
 # 为音频片段添加淡入淡出
-audio_segment = draft.AudioSegment("audio.mp3", trange("0s", "10s"))
+audio_segment = draft.AudioSegment("audio.mp3", trange_seconds(0, duration=10))
 audio_segment.add_fade("1s", "2s")  # 1秒淡入，2秒淡出
 
 # 为带音轨的视频片段添加淡入淡出
-video_segment = draft.VideoSegment("video_with_audio.mp4", trange("0s", "10s"))
+video_segment = draft.VideoSegment("video_with_audio.mp4", trange_seconds(0, duration=10))
 video_segment.add_fade("1.5s", "1.5s")  # 1.5秒淡入，1.5秒淡出
 ```
 
@@ -643,8 +652,11 @@ video_segment.add_chroma(
 > ℹ 叠加轨道必须位于基础轨道上方，可通过显式追加/插入控制顺序
 
 使用`VideoSegment.set_mix_mode()`方法为视频片段设置混合模式：
+
+同一片段的 `mix_mode` 属性只保存一个当前混合模式；重复调用时，以最后一次设置为准，素材 ID 保持不变。首次设置应在片段加入草稿前完成；已设置模式并加入草稿后，再次调用也会更新已登记的素材。
+
 ```python
-from pyJianYingDraft import MixModeType
+from pyJianYingDraft import MixModeType, trange_seconds
 
 # 创建两个视频轨道，明确层次关系
 script.append_tracks([
@@ -653,11 +665,11 @@ script.append_tracks([
 ])
 
 # 基础视频片段
-base_video = draft.VideoSegment("base.mp4", trange("0s", "10s"))
+base_video = draft.VideoSegment("base.mp4", trange_seconds(0, duration=10))
 script.add_segment(base_video, track="base")
 
 # 叠加视频片段，使用”滤色”混合模式
-overlay_video = draft.VideoSegment("overlay.mp4", trange("0s", "10s"))
+overlay_video = draft.VideoSegment("overlay.mp4", trange_seconds(0, duration=10))
 overlay_video.set_mix_mode(MixModeType.滤色)
 script.add_segment(overlay_video, track="overlay")
 ```
@@ -753,14 +765,15 @@ script.append_tracks([
 
 接下来便可使用`add_effect`和`add_filter`方法向这些轨道添加片段：
 ```python
-from pyJianYingDraft import VideoSceneEffectType, FilterType, trange
+from pyJianYingDraft import VideoSceneEffectType, FilterType, trange, trange_seconds
 
 # 在特效轨道上添加一个"胶片闪切"特效，持续5秒，并设置其参数
-script.add_effect(VideoSceneEffectType.胶片闪切, trange("0s", "5s"),
+script.add_effect(VideoSceneEffectType.胶片闪切, trange_seconds(0, duration=5),
                   track_name="my_effect",  # 当特效轨道只有一条时可省略
                   params=[50, None, 80])  # 设置速度为50，保持强度默认(100)，设置纹理为80
 
 # 在滤镜轨道上添加一个"哈苏蓝"滤镜，持续整个视频，强度为70
+# script.duration是内部微秒值，直接使用trange
 script.add_filter(FilterType.哈苏蓝, trange(0, script.duration),
                   track_name="my_filter",  # 当滤镜轨道只有一条时可省略
                   intensity=70)
@@ -787,10 +800,10 @@ text_seg.add_animation(TextLoopAnim.色差故障)  # 注意：循环动画必须
 例如：
 ```python
 import pyJianYingDraft as draft
-from pyJianYingDraft import FontType, TextStyle, ClipSettings
+from pyJianYingDraft import FontType, TextStyle, ClipSettings, trange_seconds
 
 # 带下划线、位置及大小类似字幕的浅蓝色文本
-seg1 = draft.TextSegment("Subtitle", trange("0s", "10s"),
+seg1 = draft.TextSegment("Subtitle", trange_seconds(0, duration=10),
                           font=FontType.文轩体,
                           style=TextStyle(size=5.0, color=(0.7, 0.7, 1.0), underline=True, align=1),
                           clip_settings=ClipSettings(transform_y=-0.8))
@@ -801,7 +814,7 @@ seg1 = draft.TextSegment("Subtitle", trange("0s", "10s"),
 ```python
 seg2 = draft.TextSegment(
     "使用本机字体文件的文本",
-    trange("0s", "10s"),
+    trange_seconds(0, duration=10),
     font_path=r"C:\\Windows\\Fonts\\msyh.ttc",
     style=TextStyle(size=5.0),
 )
@@ -825,7 +838,7 @@ text_segment.add_effect(TextEffectType.拼贴浅红)
 ```python
 # 启用自动换行，设置最大行宽为屏幕宽度的70%
 seg2 = draft.TextSegment("这是一段很长的文本内容，当超过设定的最大行宽时会自动换行显示",
-                          trange("0s", "10s"),
+                          trange_seconds(0, duration=10),
                           font=FontType.文轩体,
                           style=TextStyle(size=5.0,
                                           auto_wrapping=True,      # 启用自动换行

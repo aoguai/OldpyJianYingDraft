@@ -116,8 +116,8 @@ class _ScriptFileSegmentOps:
             for beauty_effect in segment.beauty_effects:
                 if beauty_effect not in self.materials:
                     self.materials.beauty_effects.append(beauty_effect)
-            for mix_mode in segment.mix_modes:
-                self.materials.mix_modes.append(mix_mode)
+            if segment.mix_mode is not None and segment.mix_mode not in self.materials:
+                self.materials.mix_modes.append(segment.mix_mode)
             if segment.mask is not None:
                 self.materials.masks.append(segment.mask.export_json())
             if segment.transition is not None and segment.transition not in self.materials:
