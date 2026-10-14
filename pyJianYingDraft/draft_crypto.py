@@ -202,8 +202,8 @@ def _parse_install_dir_from_env_text(env_text: str) -> Optional[Path]:
 
 
 def _env_file_candidates() -> Iterable[Path]:
-    yield Path.cwd() / ".env"
-    yield Path(__file__).resolve().parent / ".env"
+    yield Path.cwd() / "config.env"
+    yield Path(__file__).resolve().parent / "config.env"
 
 
 def _resolve_install_dir(jy_install_dir: Optional[PathLike]) -> Path:
@@ -223,7 +223,7 @@ def _resolve_install_dir(jy_install_dir: Optional[PathLike]) -> Path:
 
     raise DraftCryptoError(
         "JY_INSTALL_DIR is required; pass jy_install_dir, set the environment variable, "
-        "or create a .env file"
+        "or create a config.env file"
     )
 
 

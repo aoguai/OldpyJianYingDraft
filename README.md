@@ -86,6 +86,7 @@
 | [提取模板中出现的贴纸/气泡/花字等元信息](#提取素材元数据) | ✅ | 10.8 🟡<br>依赖模板可读 |
 | 私有 `content_codec` 可逆读写与原格式保持 | - | 本 fork ✅ |
 | [私有草稿注册与逻辑文件夹](#私有草稿注册与逻辑文件夹) | - | 本 fork ✅ |
+| [本地媒体与字体内联](#本地媒体与字体内联) | 本 fork ✅ | 本 fork ✅ |
 
 ### 批量导出
 > ⚠️ 自动导出依赖旧版剪映可见控件；新版（7及以上）剪映通常不再满足这一前提
@@ -192,7 +193,7 @@ draft_folder = draft.DraftFolder(
 )
 ```
 
-`fallback_loader` 与 `content_codec` 不能同时传入：前者是上游的只读加载回调，后者是本 fork 的读写格式协议。
+`fallback_loader` 与 `content_codec` 不能同时传入：前者是上游的只读加载回调，后者是本 fork 的读写格式协议。剪映安装目录可通过 `DraftCryptoConfig(jy_install_dir=...)` 显式提供，也可使用进程环境 `JY_INSTALL_DIR`，库读取调用进程的环境。
 
 #### 私有草稿注册与逻辑文件夹
 当需要让新草稿自动登记到剪映的根 metadata，或按剪映逻辑文件夹组织草稿时，为`DraftFolder`提供本机 `JianyingPro User Data` 路径。首次`save()`会写入草稿注册信息；之后再移动到逻辑文件夹。
@@ -216,6 +217,14 @@ draft_folder.remove_folder("活动", on_non_empty="move_drafts_to_root")
 ```
 
 `remove_folder(..., on_non_empty="delete_drafts")` 会同时删除子树映射中的草稿物理目录；仅应在确认该副作用后使用。
+
+`draft_folder.list_folders()` 只读取当前用户的逻辑文件夹，不创建配置文件。读取与创建、移动、删除是独立操作；查询目录不代表草稿已经注册。
+
+#### 本地媒体与字体内联
+
+`script.save(inline_materials=True)` 在保存时复制草稿引用的本地媒体和字体，并重写已知路径引用。它适合将外部文件依赖收进草稿目录后交付；不下载远端资源，也不保证所有剪映在线特效已缓存。源文件不存在时抛出 `FileNotFoundError`，调用方应补齐源文件后重试，不能将失败结果当成完整工程。
+
+内联处理媒体和字体依赖，不代替目标机器的草稿注册，也不代替在对应剪映版本中打开、检查和导出。跨电脑交付应携带完整草稿目录，并由目标机器完成注册与人工检查。
 
 为了最大限度地兼容模板中的复杂特性，**导入的轨道与pyJianYingDraft创建的轨道是分离开的**，具体地讲：
 
